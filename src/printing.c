@@ -28,6 +28,13 @@
 #include "exactExchangeEnergyDensity.h"
 #include "mGGAtauTransferTauVxc.h"
 #include "initialization.h"
+#include "energyDensity.h"
+#include "energy.h"
+#include "electronicGroundState.h"
+#include "electronDensity.h"
+#include "eigenSolver.h"
+#include "eigenSolverKpt.h"
+#include "isddft.h"
 
 
 /**
@@ -42,8 +49,8 @@ void printElecDens(SPARC_OBJ *pSPARC) {
     int Nd = pSPARC->Nd;
     DMnd = pSPARC->Nd_d;
     
-    double *rho_at, *rho, *mag, *mag_at, *b_ref, *b;
-    rho_at = rho = mag = mag_at = b_ref = b = NULL;
+    double *rho_at, *rho, *mag, *mag_at, *b_ref, *b, *EbandRhoPrint, *EentRho, *Phi;
+    rho_at = rho = mag = mag_at = b_ref = b = EbandRhoPrint = EentRho = Phi =NULL;
     // TODO: add printing mag and mag_at etc as followed
     
     if (nproc_dmcomm_phi > 1) { // if there's more than one process, need to collect rho first
@@ -73,18 +80,34 @@ void printElecDens(SPARC_OBJ *pSPARC) {
         Set_D2D_Target(&d2d_sender, &d2d_recvr, gridsizes, pSPARC->DMVertices, rDMVert, pSPARC->dmcomm_phi, 
                        sdims, recv_comm, rdims, pSPARC->dmcomm_phi);
         if (rank_dmcomm_phi == 0) {
-            rho_at = (double*)malloc(pSPARC->Nd * sizeof(double));
+            rho_at = (double*)malloc(pSPARC->Nd * pSPARC->Nspdentd * sizeof(double));
             rho    = (double*)malloc(pSPARC->Nd * pSPARC->Nspdentd * sizeof(double));
             b_ref  = (double*)malloc(pSPARC->Nd * sizeof(double));
             b      = (double*)malloc(pSPARC->Nd * sizeof(double));
+            EbandRhoPrint = (double*)malloc(pSPARC->Nd * sizeof(double));
+            EentRho = (double*)malloc(pSPARC->Nd * sizeof(double));
+            Phi = (double*)malloc(pSPARC->Nd * sizeof(double));
         }
         // send rho_at, rho and b_ref
         D2D(&d2d_sender, &d2d_recvr, gridsizes, pSPARC->DMVertices, pSPARC->electronDens_at, rDMVert, 
             rho_at, pSPARC->dmcomm_phi, sdims, recv_comm, rdims, pSPARC->dmcomm_phi, sizeof(double));
 
+        if (pSPARC->Nspin > 1) { // send rho_at_up, rho_at_down
+            D2D(&d2d_sender, &d2d_recvr, gridsizes, pSPARC->DMVertices, pSPARC->electronDens_at+DMnd, rDMVert, 
+                rho_at+Nd, pSPARC->dmcomm_phi, sdims, recv_comm, rdims, pSPARC->dmcomm_phi, sizeof(double));
+            D2D(&d2d_sender, &d2d_recvr, gridsizes, pSPARC->DMVertices, pSPARC->electronDens_at+2*DMnd, rDMVert, 
+                rho_at+2*Nd, pSPARC->dmcomm_phi, sdims, recv_comm, rdims, pSPARC->dmcomm_phi, sizeof(double));
+        }
+
         D2D(&d2d_sender, &d2d_recvr, gridsizes, pSPARC->DMVertices, pSPARC->electronDens, rDMVert, 
             rho, pSPARC->dmcomm_phi, sdims, recv_comm, rdims, pSPARC->dmcomm_phi, sizeof(double));
-        
+        D2D(&d2d_sender, &d2d_recvr, gridsizes, pSPARC->DMVertices, pSPARC->EbandRhoPrint, rDMVert,
+            EbandRhoPrint, pSPARC->dmcomm_phi, sdims, recv_comm, rdims, pSPARC->dmcomm_phi, sizeof(double));
+        D2D(&d2d_sender, &d2d_recvr, gridsizes, pSPARC->DMVertices, pSPARC->EentRho, rDMVert,
+            EentRho, pSPARC->dmcomm_phi, sdims, recv_comm, rdims, pSPARC->dmcomm_phi, sizeof(double));
+        D2D(&d2d_sender, &d2d_recvr, gridsizes, pSPARC->DMVertices, pSPARC->elecstPotential, rDMVert,
+            Phi, pSPARC->dmcomm_phi, sdims, recv_comm, rdims, pSPARC->dmcomm_phi), sizeof(double);
+
         if (pSPARC->Nspdentd > 1) { // send rho_up, rho_down
             D2D(&d2d_sender, &d2d_recvr, gridsizes, pSPARC->DMVertices, pSPARC->electronDens+DMnd, rDMVert, 
                 rho+Nd, pSPARC->dmcomm_phi, sdims, recv_comm, rdims, pSPARC->dmcomm_phi, sizeof(double));
@@ -107,12 +130,20 @@ void printElecDens(SPARC_OBJ *pSPARC) {
         rho    = pSPARC->electronDens;
         b_ref  = pSPARC->psdChrgDens_ref;
         b      = pSPARC->psdChrgDens;
+        EbandRhoPrint = pSPARC->EbandRhoPrint;
+        EentRho = pSPARC->EentRho;
+        Phi = pSPARC->elecstPotential;
     }
     
     if (rank_dmcomm_phi == 0) {
         if (pSPARC->Nspdentd == 1) {
             // printing total electron density in cube format
             printDens_cube(pSPARC, rho, pSPARC->DensTCubFilename, "Electron density");
+            printDens_cube(pSPARC, b, pSPARC->NucPsdChargeFilename, "Nuclear pseudocharge density");
+            printDens_cube(pSPARC, EbandRhoPrint, pSPARC->EbandFieldFilename, "Band energy density");
+            printDens_cube(pSPARC, EentRho, pSPARC->EentFieldFilename, "Entropy energy density");
+            printDens_cube(pSPARC, Phi, pSPARC->PhiFilename, "Electrostatic potential");
+        
         } else {
             // printing total, spin-up and spin-down electron density in cube format
             printDens_cube(pSPARC, rho, pSPARC->DensTCubFilename, "Total electron density");
@@ -128,6 +159,9 @@ void printElecDens(SPARC_OBJ *pSPARC) {
             free(rho);
             free(b_ref);
             free(b);
+            free(EbandRhoPrint);
+            free(EentRho);
+            free(Phi);
         }
     }
 }
@@ -151,6 +185,9 @@ void printDens_cube(SPARC_OBJ *pSPARC, double *rho, char *fname, char *rhoname) 
     double dz = pSPARC->delta_z;
 
     // printing headers
+    int iter = pSPARC->MDCount + pSPARC->restartCount + (pSPARC->RestartFlag == 0);
+    if (iter == 1 || iter%pSPARC->Printrestart_fq == 0){
+        fprintf(output_fp, "\nTIMESTEP: %d \n", iter);
     time_t current_time;
     time(&current_time);
     char *c_time_str = ctime(&current_time);
@@ -191,6 +228,7 @@ void printDens_cube(SPARC_OBJ *pSPARC, double *rho, char *fname, char *rhoname) 
                     fprintf(output_fp, "\n");
             }
             fprintf(output_fp, "\n");
+            }
         }
     }
 
@@ -789,7 +827,7 @@ void printEnergyDensity(SPARC_OBJ *pSPARC)
     int rank, nproc_dmcomm, rank_dmcomm, nproc_dmcomm_phi, rank_dmcomm_phi;
     int DMnd, Nd;
     double *KineticRho, *ExxRho, *ExcRho;
-    KineticRho = ExxRho = ExcRho = NULL;
+    KineticRho = ExxRho = ExcRho = EentRho = EbandRhoPrint = Phi = b = NULL;
 
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
     Nd = pSPARC->Nd;
@@ -806,6 +844,11 @@ void printEnergyDensity(SPARC_OBJ *pSPARC)
     t2 = MPI_Wtime();
     if (rank == 0) printf("Time for calculating kinetic energy density: %.3f ms\n", (t2-t1)*1e3);
 #endif
+
+    // compute band energy density
+    // pSPARC->EbandRho = (double *) calloc( pSPARC->Nd_d, sizeof(double));
+    // Calculate_Eband_for_Dens(pSPARC, pSPARC->EbandRho);
+    // Calculate_bandDens(rank, pSPARC, SCFcount, error);
 
     // compute exchange correlation energy density
     pSPARC->ExcRho = (double *) calloc( pSPARC->Nd_d, sizeof(double));
@@ -824,6 +867,9 @@ if (rank == 0) printf("Time for calculating exchange correlation energy density:
         if (rank == 0) printf("Time for calculating exact exchange energy density: %.3f ms\n", (t2-t1)*1e3);
 #endif
     }
+
+    // compute electrostatic potential
+    // pSPARC->Phi = pSPARC->elecstPotential;
 
     // start printing
     int n_rho = 1;
@@ -855,12 +901,20 @@ if (rank == 0) printf("Time for calculating exchange correlation energy density:
     if (rank == 0) {
         KineticRho = (double*)malloc(Nd * n_rho * sizeof(double));
         ExcRho = (double*)malloc(Nd * sizeof(double));
+        Phi = (double*)malloc(Nd * sizeof(double));
+        b = (double*)malloc(Nd * sizeof(double));
+        EbandRhoPrint = (double*)malloc(Nd * sizeof(double));
+        EentRho = (double*)malloc(Nd * sizeof(double));
         if (pSPARC->usefock > 0) {
             ExxRho = (double*)malloc(Nd * n_rho * sizeof(double));
         }
     }
     
     GatherEnergyDensity_dmcomm(pSPARC, pSPARC->KineticRho, KineticRho);
+    // GatherEnergyDensity_dmcomm(pSPARC, pSPARC->elecstPotential, Phi);
+    // GatherEnergyDensity_dmcomm(pSPARC, pSPARC->psdChrgDens, b);
+    // GatherEnergyDensity_dmcomm(pSPARC, pSPARC->EbandRhoPrint, EbandRhoPrint);
+    // GatherEnergyDensity_dmcomm(pSPARC, pSPARC->EentRho, EentRho);
     if (pSPARC->Nspin > 1) {
         GatherEnergyDensity_dmcomm(pSPARC, pSPARC->KineticRho + DMnd, KineticRho + Nd);
         GatherEnergyDensity_dmcomm(pSPARC, pSPARC->KineticRho + 2*DMnd, KineticRho + 2*Nd);
@@ -889,6 +943,10 @@ if (rank == 0) printf("Time for calculating exchange correlation energy density:
         // print in cube format
         if (pSPARC->Nspin == 1) {
             printDens_cube(pSPARC, KineticRho, pSPARC->KinEnDensTCubFilename, "Kinetic energy density");
+            // printDens_cube(pSPARC, Phi, pSPARC->PhiFilename, "Electrostatic potential");
+            // printDens_cube(pSPARC, b, pSPARC->NucPsdChargeFilename, "Nuclear pseudocharge density");
+            // printDens_cube(pSPARC, EbandRhoPrint, pSPARC->EbandFieldFilename, "Band energy density");
+            // printDens_cube(pSPARC, EentRho, pSPARC->EentFieldFilename, "Entropy energy density");
         } else {
             printDens_cube(pSPARC, KineticRho, pSPARC->KinEnDensTCubFilename, "Total kinetic energy density");
             printDens_cube(pSPARC, KineticRho + Nd, pSPARC->KinEnDensUCubFilename, "Spin-up kinetic energy density");
@@ -908,7 +966,11 @@ if (rank == 0) printf("Time for calculating exchange correlation energy density:
 
     if (rank == 0) {
         free(KineticRho);
+        free(Phi);
+        free(b);
         free(ExcRho);
+        free(EbandRhoPrint);
+        free(EentRho);
         if (pSPARC->usefock > 0) {
             free(ExxRho);
         }
@@ -916,6 +978,9 @@ if (rank == 0) printf("Time for calculating exchange correlation energy density:
 
     free(pSPARC->ExcRho);
     free(pSPARC->KineticRho);
+    //free(pSPARC->EbandRho);
+    //free(pSPARC->elecstPotential);
+    //free(pSPARC->psdChrgDens);
     if (pSPARC->usefock > 0) {
         free(pSPARC->ExxRho);
     }
