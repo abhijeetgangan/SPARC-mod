@@ -52,6 +52,11 @@ void print_orbital_complex(
 );
 
 /**
+ * @brief band energy density
+ */
+void CalculateDensity_Band(SPARC_OBJ *pSPARC, double *EbandRhoPrint);
+
+/**
  * @brief   Print Energy density
  */
 void printEnergyDensity(SPARC_OBJ *pSPARC);
