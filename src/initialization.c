@@ -1472,6 +1472,10 @@ void SPARC_copy_input(SPARC_OBJ *pSPARC, SPARC_INPUT_OBJ *pSPARC_Input) {
         snprintf(pSPARC->DensTCubFilename,  L_STRING, "%s.dens",   pSPARC->filename_out);
         snprintf(pSPARC->DensUCubFilename,  L_STRING, "%s.densUp",    pSPARC->filename_out);
         snprintf(pSPARC->DensDCubFilename,  L_STRING, "%s.densDwn",   pSPARC->filename_out);
+        snprintf(pSPARC->PhiFilename,  L_STRING, "%s.phi",   pSPARC->filename_out);
+        snprintf(pSPARC->NucPsdChargeFilename,  L_STRING, "%s.b",   pSPARC->filename_out);
+        snprintf(pSPARC->EbandFieldFilename,  L_STRING, "%s.eband",   pSPARC->filename_out);
+        snprintf(pSPARC->EentFieldFilename,  L_STRING, "%s.eent",   pSPARC->filename_out);
         snprintf(pSPARC->OrbitalsFilename,  L_STRING, "%s.psi",       pSPARC->filename_out);
         snprintf(pSPARC->KinEnDensTCubFilename,  L_STRING, "%s.kedens",       pSPARC->filename_out);
         snprintf(pSPARC->KinEnDensUCubFilename,  L_STRING, "%s.kedensUp",     pSPARC->filename_out);
@@ -1532,6 +1536,14 @@ void SPARC_copy_input(SPARC_OBJ *pSPARC, SPARC_INPUT_OBJ *pSPARC_Input) {
             snprintf(pSPARC->DensUCubFilename, L_STRING, "%s_%02d", tempchar, i);
             snprintf(tempchar, L_STRING, "%s", pSPARC->DensDCubFilename);
             snprintf(pSPARC->DensDCubFilename, L_STRING, "%s_%02d", tempchar, i);
+            snprintf(tempchar, L_STRING, "%s", pSPARC->PhiFilename);
+            snprintf(pSPARC->PhiFilename, L_STRING, "%s_%02d", tempchar, i);
+            snprintf(tempchar, L_STRING, "%s", pSPARC->NucPsdChargeFilename);
+            snprintf(pSPARC->NucPsdChargeFilename, L_STRING, "%s_%02d", tempchar, i);
+            snprintf(tempchar, L_STRING, "%s", pSPARC->EbandFieldFilename);
+            snprintf(pSPARC->EbandFieldFilename, L_STRING, "%s_%02d", tempchar, i);
+            snprintf(tempchar, L_STRING, "%s", pSPARC->EentFieldFilename);
+            snprintf(pSPARC->EentFieldFilename, L_STRING, "%s_%02d", tempchar, i);
             snprintf(tempchar, L_STRING, "%s", pSPARC->OrbitalsFilename);
             snprintf(pSPARC->OrbitalsFilename, L_STRING, "%s_%02d", tempchar, i);
             // energy density files 
@@ -3795,6 +3807,8 @@ void write_output_init(SPARC_OBJ *pSPARC) {
         fprintf(output_fp,"Mesh spacing in y-direction        :  %.6g (Bohr)\n",pSPARC->delta_y);
         fprintf(output_fp,"Mesh spacing in z-direction        :  %.6g (Bohr)\n",pSPARC->delta_z);
     }
+
+    fprintf(output_fp,"Integration weights                :  %.10g\n",pSPARC->dV);
 
     if (pSPARC->BC==2 || pSPARC->BC==3 || pSPARC->BC==4) {
         fprintf(output_fp,"Number of symmetry adapted k-points:  %d\n",pSPARC->Nkpts_sym);
