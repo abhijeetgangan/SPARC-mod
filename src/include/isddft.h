@@ -196,6 +196,10 @@ typedef struct _SPARC_OBJ{
     char DensTCubFilename[L_STRING];
     char DensDCubFilename[L_STRING];
     char DensUCubFilename[L_STRING];
+    char PhiFilename[L_STRING];
+    char NucPsdChargeFilename[L_STRING];
+    char EbandFieldFilename[L_STRING];
+    char EentFieldFilename[L_STRING];
     char OrbitalsFilename[L_STRING];
     char KinEnDensTCubFilename[L_STRING];
     char KinEnDensUCubFilename[L_STRING];
@@ -440,7 +444,7 @@ typedef struct _SPARC_OBJ{
     double *Veff_loc_dmcomm_phi;        // effective local potential distributed in phi-domain (LOCAL)
     double *Veff_dia_loc_dmcomm_phi;    // effective local potential distributed in phi-domain (LOCAL), diagonal term
     double *Veff_loc_dmcomm_phi_in;     // input effective local potential at each SCF distributed in phi-domain (LOCAL)
-    double *Veff_loc_kptcomm_topo;      // effective local potential distributed in each kptcomm_topo (LOCAL), only used if npkpt > 1    
+    double *Veff_loc_kptcomm_topo;      // effective local potential distributed in each kptcomm_topo (LOCAL), only used if npkpt > 1
 
     double *mixing_hist_xk;      // previous effective local potential distributed in phi-domain (LOCAL)
     double *mixing_hist_xkm1;    // residual of mixed Veff_loc (between new mixed and previous mixed) in phi-domain (LOCAL)
@@ -960,6 +964,9 @@ typedef struct _SPARC_OBJ{
     double *KineticRho;         // Kinetic energy density
     double *ExxRho;             // Exact exchange energy density
     double *ExcRho;             // Exchange correlation energy density
+    double *EbandRho;           // Band energies for density
+    double *EbandRhoPrint;      // Band energy density
+    double *EentRho;            // Entropy energy density
 
     /* Timing */
     double time_start;
